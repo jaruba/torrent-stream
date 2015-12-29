@@ -196,8 +196,13 @@ var torrentStream = function (link, opts, cb) {
       })
 
       if (prev === engine.amInterested) return
-      if (engine.amInterested) engine.emit('interested')
-      else engine.emit('uninterested')
+      if (engine.amInterested) {
+        engine.emit('interested');
+        if (swarm.paused) {
+          swarm.resume();
+//          discovery.restart();
+        }
+      } else engine.emit('uninterested');
     }
 
     var gc = function () {
@@ -628,6 +633,11 @@ var torrentStream = function (link, opts, cb) {
       engine.metadata = torrent.infoBuffer
       ontorrent(torrent)
     })
+  }
+
+  engine.discover = function() {
+    swarm.reconnectAll();
+//    discovery.restart();
   }
 
   engine.critical = function (piece, width) {
