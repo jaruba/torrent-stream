@@ -20,7 +20,7 @@
     "ip-set": "^1.0.0",
     "mkdirp": "^0.3.5",
     "parse-torrent": "^4.0.0",
-    "peer-wire-swarm": "^0.12.0",
+    "peer-wire-swarm": "jaruba/peer-wire-swarm",
     "random-access-file": "^0.3.1",
     "rimraf": "^2.2.5",
     "thunky": "^0.1.0",
