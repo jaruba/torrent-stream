@@ -115,6 +115,10 @@ var torrentStream = function (link, opts, cb) {
   var blocked = blocklist(opts.blocklist)
 
   discovery.on('peer', function (addr) {
+
+    if (typeof addr !== 'string' && addr.host && addr.port)
+	  addr = addr.host + ':' + addr.port;
+	  
     if (blocked.contains(addr.split(':')[0])) {
       engine.emit('blocked-peer', addr)
     } else {
@@ -124,6 +128,10 @@ var torrentStream = function (link, opts, cb) {
   })
   
   discovery.on('forcePeer', function (addr) {
+
+      if (typeof addr !== 'string' && addr.host && addr.port)
+	    addr = addr.host + ':' + addr.port;
+
 	  if (engine.swarm && engine.swarm.paused) engine.swarm.paused = false;
 	  if (blocked.contains(addr.split(':')[0])) {
 	    engine.emit('blocked-peer', addr)
