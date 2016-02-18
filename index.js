@@ -648,8 +648,13 @@ var torrentStream = function (link, opts, cb) {
   }
 
   engine.discover = function() {
+	if (discovery.amSeeder) return;
     swarm.reconnectAll();
     discovery.restart();
+  }
+  
+  engine.announceComplete = function() {
+	  discovery.complete();
   }
 
   engine.critical = function (piece, width) {
