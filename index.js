@@ -563,9 +563,26 @@ var torrentStream = function (link, opts, cb) {
       })
     }
 
+    var updateTrackerNoBounce = () => {
+      discovery.update({
+        uploaded: swarm.uploaded,
+        downloaded: swarm.downloaded
+      })
+    }
+
+    var updateTracker = debounce(updateTrackerNoBounce, 1500, { maxWait: 4000 })
+
     var onready = function () {
       swarm.on('wire', onwire)
       swarm.wires.forEach(onwire)
+
+      swarm.on('download', function() {
+        updateTracker()
+      })
+
+      swarm.on('upload', function() {
+        updateTracker()
+      })
 
       refresh = function () {
         process.nextTick(gc)
@@ -654,7 +671,10 @@ var torrentStream = function (link, opts, cb) {
   }
   
   engine.announceComplete = function() {
-	  discovery.complete();
+	  discovery.complete({
+      uploaded: swarm.uploaded,
+      downloaded: swarm.downloaded
+    });
   }
 
   engine.critical = function (piece, width) {
@@ -819,7 +839,10 @@ var torrentStream = function (link, opts, cb) {
 		}
 		var mask = 256 - Math.pow(2, 8 - rem); // the last byte may be not full
 		if (rem === 0 || buffer[bytes] === mask) {
-			discovery.complete();
+			discovery.complete({
+        uploaded: swarm.uploaded,
+        downloaded: swarm.downloaded
+      });
 			engine.emit('complete');
 		}
 	}, COMPLETE_DEBOUNCE_DELAY));
