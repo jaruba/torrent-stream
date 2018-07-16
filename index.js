@@ -15,7 +15,7 @@ var piece = require('torrent-piece')
 var rimraf = require('rimraf')
 var FSChunkStore = require('fs-chunk-store')
 var ImmediateChunkStore = require('immediate-chunk-store')
-var peerDiscovery = require('./lib/peer-discovery');
+var peerDiscovery = require('torrent-discovery')
 
 var blocklist = require('ip-set')
 var exchangeMetadata = require('./lib/exchange-metadata')
@@ -110,36 +110,40 @@ var torrentStream = function (link, opts, cb) {
   engine._flood = opts.flood
   engine._pulse = opts.pulse
 
-  var discovery = peerDiscovery(opts);
+  var discoveryOpts = {
+    peerId: new Buffer(opts.id),
+    dht: (opts.dht !== undefined) ? opts.dht : true,
+    tracker: (opts.tracker !== undefined) ? opts.tracker : true,
+    port: opts.port || DEFAULT_PORT,
+    announce: [].concat(opts.trackers || []).concat(link.announce || []),
+    noSeeding: opts.noSeeding,
+    infoHash: infoHash
+  }
+
+  var discovery = peerDiscovery(discoveryOpts)
   
   var blocked = blocklist(opts.blocklist)
 
-  discovery.on('peer', function (addr) {
+  var onPeer = function (addrObj) {
+
+    var addr = addrObj.address
 
     if (typeof addr !== 'string' && addr.host && addr.port)
-	  addr = addr.host + ':' + addr.port;
-	  
+      addr = addr.host + ':' + addr.port;
+
+    if (addrObj.force && engine.swarm && engine.swarm.paused)
+      engine.swarm.paused = false;
+
     if (blocked.contains(addr.split(':')[0])) {
       engine.emit('blocked-peer', addr)
     } else {
       engine.emit('peer', addr)
       engine.connect(addr)
     }
-  })
-  
-  discovery.on('forcePeer', function (addr) {
 
-      if (typeof addr !== 'string' && addr.host && addr.port)
-	    addr = addr.host + ':' + addr.port;
+  }
 
-	  if (engine.swarm && engine.swarm.paused) engine.swarm.paused = false;
-	  if (blocked.contains(addr.split(':')[0])) {
-	    engine.emit('blocked-peer', addr)
-	  } else {
-	    engine.emit('peer', addr)
-	    engine.connect(addr)
-	  }
-  })
+  discovery.on('peer', onPeer)
 
   var ontorrent = function (torrent) {
     var storage = opts.storage || FSChunkStore
@@ -212,7 +216,7 @@ var torrentStream = function (link, opts, cb) {
         engine.emit('interested');
         if (swarm.paused) {
           swarm.resume();
-          discovery.restart();
+//          discovery.restart();
         }
       } else engine.emit('uninterested');
     }
@@ -665,9 +669,15 @@ var torrentStream = function (link, opts, cb) {
   }
 
   engine.discover = function() {
-	if (discovery.amSeeder) return;
+	  if (discovery.amSeeder) return;
     swarm.reconnectAll();
-    discovery.restart();
+
+    discovery.removeListener('peer', onPeer)
+
+    discovery.destroy(function() {
+      discovery = peerDiscovery(discoveryOpts)
+      discovery.on('peer', onPeer)
+    });
   }
   
   engine.announceComplete = function() {
@@ -796,12 +806,13 @@ var torrentStream = function (link, opts, cb) {
     destroyed = true
     swarm.destroy()
     clearInterval(rechokeIntervalId)
-    discovery.stop()
-    if (engine.store && engine.store.close) {
-      engine.store.close(cb)
-    } else if (cb) {
-      process.nextTick(cb)
-    }
+    discovery.destroy(function() {
+      if (engine.store && engine.store.close) {
+        engine.store.close(cb)
+      } else if (cb) {
+        process.nextTick(cb)
+      }
+    })
   }
 
   var findPort = function (def, cb) {
